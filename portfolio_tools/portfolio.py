@@ -514,6 +514,29 @@ class Portfolio(object):
 
             wb.save('/Users/connahcutbush/Desktop/perf_summary.xlsx')
 
+    def pnl_to_csv(self, filename=''):
+
+        if filename == '':
+            filename = os.path.join(settings.OUTPUT_PATH, settings.DEFAULT_PNL_FILE.split('.')[0]
+                                    + datetime.datetime.today().strftime('%Y-%m-%d') + '.csv')
+        with open(filename, 'w') as pnlfile:
+            csvwriter = csv.writer(pnlfile, dialect='excel')
+            # header = ['trade_date', 'stock_id', 'exchange_ticker', 'shares', 'trade_open_price', 'close_price']
+
+            header = ['market_trade_date', 'stock_id', 'exchange_ticker', 'open_date', 'start_price', 'close_date',
+                      'end_price',
+                      'max_exposure', 'days_open', 'direction', 'status', 'div_ex_date', 'div_pershare',
+                      'franking_pct', 'dy', 'trade_size_adj', 'shares',
+                      'entry_value', 'franking_credit', 'gross_div',
+                      'gross_yield', 'trading_costs', 'funding_costs', 'shorting_costs', 'cash_dividends',
+                      # 'franking_credits', 'exit_value',
+                      'market_close_price']
+            csvwriter.writerow(header)
+            # walk through dates
+
+            for p in self.pnl:
+                csvwriter.writerow(p)
+
     def build_trades_list(self):
         # loop to process the historic data
         for trade_date in self.trade_dates():
