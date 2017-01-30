@@ -1,8 +1,9 @@
 import csv
 import datetime
 import os
-import pandas as pd
 import pickle
+
+import pandas as pd
 from openpyxl import Workbook
 
 import settings
@@ -512,3 +513,111 @@ class Portfolio(object):
                 print(year, stocks)
 
             wb.save('/Users/connahcutbush/Desktop/perf_summary.xlsx')
+
+    def build_trades_list(self):
+        # loop to process the historic data
+        for trade_date in self.trade_dates():
+            # Check age of existing trades and close out if necessary
+            print('Status: ' + trade_date + ': cash balance: ' + '${:,.0f}'.format(self._cash_account))
+            # self.update_trades(trade_date)
+            self.update_trades(trade_date)
+
+            # Apply the filters (has_div, ER, volatility) to limit the universe
+            sample_data = self.apply_strategy_filters(self._dataset.query('(date == "' + trade_date + '")'))
+
+            # Check for new divs to trade and open trades
+            self.open_trades(sample_data)
+
+            filename = os.path.join(settings.OUTPUT_PATH, 'per-'
+                                    + datetime.datetime.today().strftime('%Y-%m-%d') + '.csv')
+            # self.performance.to_csv(filename)
+            # self.update_pnl(trade_date)
+
+    def trades_to_csv(self, filename=''):
+
+        if filename == '':
+            filename = os.path.join(settings.OUTPUT_PATH, settings.DEFAULT_TRADE_FILE.split('.')[0]
+                                    + datetime.datetime.today().strftime('%Y-%m-%d') + '.csv')
+
+        with open(filename, 'w') as tradesfile:
+            csvwriter = csv.writer(tradesfile, dialect='excel')
+            header = ['stock_id', 'exchange_ticker', 'open_date', 'start_price', 'close_date', 'end_price',
+                      'max_exposure', 'days_open', 'direction', 'status', 'div_ex_date', 'div_pershare',
+                      'franking_pct', 'dy', 'trade_size_adj', 'shares',
+                      'entry_value', 'franking_credit', 'gross_div',
+                      'gross_yield', 'trading_costs', 'funding_costs', 'shorting_costs', 'cash_dividends']
+            # , 'franking_credits', 'exit_value']
+            csvwriter.writerow(header)
+            # walk through trades
+            for t in self.trades:
+                row_data = [t.stock_id, t.exchange_ticker, t.open_date, str(t.start_price), t.close_date, t.end_price,
+                            str(t.trade_size),
+                            str(t.days_open), t.direction, t.status, t.div_ex_date, str(t.div_pershare),
+                            str(t.franking_pct),
+                            str(t.dy), str(t.trade_size_adj), str(t.shares()), str(t.shares() * t.start_price),
+                            str(t.franking_credit()), str(t.cash_dividend()), str(t.cash_dividend() / t.start_price),
+                            str(t.tran_cost()), str(t.fund_cost()), str(t.short_cost()),
+                            str(t.cash_dividend() * t.shares())
+                            ]
+                csvwriter.writerow(row_data)
+
+    def summary(self):
+        # TODO: Build Portfolio Performance Summary
+        # write out time series of cash balance and franking balance daily
+        # total long exposure (long + long_ls)
+        # total short exposure (short_ls)
+        # net exposure (total_long + total_short) (assuming total short is always negative)
+        # num unique stocks open each day
+        # daily pnl time series
+        # Cash + franking
+
+        wb = Workbook()
+        ws = wb.create_sheet()
+        # ws.append(['blah', 'blah'])
+
+
+        self.max_open_trades
+        self.max_draw_down()
+
+        print('')
+        print('#######################################################################################')
+        print('#######################################################################################')
+        # cols = ['trade_date', 'stock_id', 'exchange_ticker', 'shares', 'trade_open_price', 'close_price']
+        cols = ['market_trade_date', 'stock_id', 'exchange_ticker', 'open_date', 'start_price', 'close_date',
+                'end_price',
+                'max_exposure', 'days_open', 'direction', 'status', 'div_ex_date', 'div_pershare',
+                'franking_pct', 'dy', 'trade_size_adj', 'shares',
+                'entry_value', 'franking_credit', 'gross_div',
+                'gross_yield', 'trading_costs', 'funding_costs', 'shorting_costs', 'cash_dividends',
+                #  'franking_credits', 'exit_value',
+                'market_close_price']
+
+        self.perf = pd.DataFrame(self.pnl, columns=cols)
+        print('Unique stocks traded', str(len(self.perf.exchange_ticker.unique())))
+        print('Stocks traded', self.perf.exchange_ticker.unique())
+        b = self.perf
+        b['date'] = pd.to_datetime(b['market_trade_date'], format='%Y-%m-%d')
+        b = b.set_index(pd.DatetimeIndex(b['date']))
+        # s = b.groupby(by=['trade_date','stock_id']).count() # this gives me a count for each stock each day
+
+        b['stock_id'].resample("M").count()
+        b['year'] = b.date.dt.year
+        c = b.drop_duplicates(subset=['year', 'exchange_ticker'])
+
+        u = c.groupby(['year'])['stock_id'].count()
+
+        print(u)
+
+        # calc the forward return
+        b['value'] = pd.to_numeric(b.market_close_price) * pd.to_numeric(b.shares)
+        # b['forward_month_ret'] = b.groupby(level=0)['tret'].shift(1)
+        d = b
+        d['value_prev'] = d.groupby(level=0)['value'].shift(1)
+        d['return'] = (d.value / d.groupby(level=0)['value'].shift(1)) - 1
+
+        for year in b['year'].unique():
+            # print(year)
+            stocks = b.query('(year == ' + str(year) + ')')['exchange_ticker'].unique()
+            print(year, stocks)
+
+        wb.save('/Users/connahcutbush/Desktop/perf_summary.xlsx')
